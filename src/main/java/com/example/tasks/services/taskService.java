@@ -3,6 +3,7 @@ package com.example.tasks.services;
 import com.example.tasks.models.task;
 import com.example.tasks.repositories.taskRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.config.Task;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -29,14 +30,16 @@ public class taskService {
     newTask.setDueDate(Task.getDueDate());
     newTask.setCategory(Task.getCategory());
     newTask.setCompleted(false);
+    newTask.setUserId(Task.getUserId());
     taskRepo.save(newTask);
     return newTask;
     }
 
     //mark the task as completed
-    public void setCompleted (int id ){
+    public void setCompleted (int id,boolean completed ){
+        System.out.println("iam in set completed controller");
     task findTask= taskRepo.findById(id);
-    findTask.setCompleted(true);
+    findTask.setCompleted(completed);
     findTask.setId(id);
     taskRepo.save(findTask);
     }
@@ -62,6 +65,7 @@ public class taskService {
     List<task> findTask = taskRepo.findAllByTitleAndUserId(name,userId);
     return findTask;
     }
+
     public List<task> getTaskBycategory(String category,int userId){
         List<task> findTask = taskRepo.findAllByCategoryAndUserId(category,userId);
         return findTask;
@@ -75,8 +79,8 @@ public class taskService {
 
     }
     //delete task
-    public boolean deleteTask(int userId, int id){
-    task findTask=taskRepo.findByIdAndUserId(userId,id);
+    public boolean deleteTask( int id){
+    task findTask=taskRepo.findById(id);
     if (findTask==null){
         return false ;
     }
@@ -85,4 +89,8 @@ public class taskService {
 }
 
 
+    public task getTaskById(int  taskId) {
+   task findTask= taskRepo.findById(taskId);
+           return findTask;
+    }
 }

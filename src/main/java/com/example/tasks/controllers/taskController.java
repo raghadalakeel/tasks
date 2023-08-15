@@ -1,77 +1,189 @@
 package com.example.tasks.controllers;
 
 import com.example.tasks.models.task;
+import com.example.tasks.models.user;
 import com.example.tasks.services.taskService;
+import com.example.tasks.services.userService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.config.Task;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
 
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
-@RestController
-@RequestMapping("/api/task")
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasRole;
+
+@Controller
 public class taskController {
-private taskService service;
+    @Autowired
+    private taskService service;
+   @Autowired
+    private userService Uservice;
+//display the user tasks page
+//working
+@GetMapping("/tasks")
+public String getTasks(Authentication authentication, Model model) {
 
-@Autowired
-    public taskController(taskService service) {
-        this.service = service;
-    }
+    if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
-@GetMapping("/userId")
-    public ResponseEntity<List<task>> getTasks(@RequestParam int userId){
-     List<task> tasks = service.getTasks(userId);
-    if (tasks.isEmpty()) {
-        // If no tasks are found, we return a 404 Not Found status
-        return ResponseEntity.notFound().build();
-    } else {
-        // If movies are found, return them with a 200 OK status
-        return ResponseEntity.ok(tasks);
-    }
+        int userId = Uservice.getUserIdByUsername(userDetails.getUsername());
 
-}
-    @PostMapping("/add")
-    //check how to send entity in request body
-        public ResponseEntity<task> addTask(@RequestBody task taskk){
-                 task Task = service.addnewTask(taskk);
-            return ResponseEntity.ok(Task);
-    }
-    @PostMapping("/completed")
-    public ResponseEntity<String>setCompleted(@RequestPart int id){
-        service.setCompleted(id);
-        return ResponseEntity.ok("task has been marked completed");
-    }
-    @PostMapping("/update")
-    public ResponseEntity<task>UpdateTask(@RequestBody task taskk){
-        task Task = service.Update(taskk);
-        return ResponseEntity.ok(Task);
-    }
-    @DeleteMapping(value="/delete" )
-    public ResponseEntity<String> deleteTask(@RequestParam int userId ,@RequestParam int id) {
-        boolean removedFromFavorites = service.deleteTask(userId,id);
-        String message;
-        if (removedFromFavorites) {
-            message = "The task has been deleted successfully!";
+
+        model.addAttribute("userId", userId);
+        List<task> tasks = service.getTasks(userId);
+        if (tasks.isEmpty()) {
+            return "noTasks";
         } else {
-            message = "we could not delete the task ";
+            model.addAttribute("tasks", tasks);
+            return "tasks";
         }
-        return new ResponseEntity<>(message, HttpStatus.CREATED);
     }
+
+ return"index";
+}
+
+    @GetMapping("/get-task/{taskId}")
+    @ResponseBody
+    public ResponseEntity<task> getTaskDetails(@PathVariable int taskId) {
+
+        task taskk = service.getTaskById(taskId);
+        if (taskk != null) {
+            return ResponseEntity.ok(taskk);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+//button
+//add a new task
+//working
+@PostMapping("/add")
+public String addTask(@ModelAttribute("task") task taskk, Model model, Authentication authentication) {
+    if (authentication != null) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        System.out.println("Authenticated User: " + userDetails.getUsername());
+
+        Collection<? extends GrantedAuthority> authorities = userDetails.getAuthorities();
+        System.out.println("Authorities: " + authorities);
+    } else {
+        System.out.println("Not Authenticated");
+    }
+    UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+    int userId = Uservice.getUserIdByUsername(userDetails.getUsername());
+
+
+    taskk.setUserId(userId);
+    task Task = service.addnewTask(taskk);
+    model.addAttribute("task", Task);
+    List<task> tasks = service.getTasks(userId); // Get updated task list
+    model.addAttribute("tasks", tasks);
+    return "redirect:/tasks?success";
+}
+//working
+@PostMapping("/completed")
+public ResponseEntity<String> markTaskCompleted(@RequestParam int id, @RequestParam boolean completed) {
+    System.out.println("iam in set completed controller");
+    service.setCompleted(id,completed);
+    return ResponseEntity.ok("Task completion status updated");
+}
+
+    // edit button
+    //update a task
+    @PostMapping("/Update")
+    public String UpdateTAsk(@RequestParam int id,@ModelAttribute("task") task taskk, Model model, Authentication authentication) {
+//        if (authentication != null) {
+//            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+//            System.out.println("Authenticated User: " + userDetails.getUsername());
+//
+//            Collection<? extends GrantedAuthority> authorities = userDetails.getAuthorities();
+//            System.out.println("Authorities: " + authorities);
+//        } else {
+//            System.out.println("Not Authenticated");
+//        }
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        int userId = Uservice.getUserIdByUsername(userDetails.getUsername());
+        taskk.setUserId(userId);
+        taskk.setId(id);
+        task Task = service.Update(taskk);
+        model.addAttribute("task", Task);
+        List<task> tasks = service.getTasks(userId); // Get updated task list
+        model.addAttribute("tasks", tasks);
+        return "tasks";
+    }
+
+
+
+    // delete button
+    //delete a task
+    // check the request param form thymleaf template
+    //working
+    @PostMapping ("/delete")
+    public String deleteTask( @RequestParam int id,Model model,Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        int userId = Uservice.getUserIdByUsername(userDetails.getUsername());
+
+        boolean removed = service.deleteTask( id);
+
+        model.addAttribute("userId", userId);
+        List<task> tasks = service.getTasks(userId); // Get updated task list
+        model.addAttribute("tasks", tasks);
+
+        if (removed) {
+            return "redirect:/tasks?successdelete";
+        } else {
+            System.out.println("not deleted");
+            return "redirect:/tasks?failuredelete";
+        }
+    }
+
+
+
+
+    //assign task for a specific category
     @PostMapping("/category")
-    public ResponseEntity<String>assignCategory(@RequestParam int id ,@RequestParam String category){
-        service.assignCategory(category,id);
-        return ResponseEntity.ok("task been assigned to this category :"+category);
+    public String assignCategory(@RequestParam int id, @RequestParam String category) {
+        service.assignCategory(category, id);
+
+        return "tasks"; // Redirect to the task list page
     }
-    @GetMapping("/search")
-    public ResponseEntity<List<task>> searchMovies(@RequestParam String name,@RequestParam int userId) {
-        List<task> searchedMovies = service.SearchTask(name,userId);
-        return ResponseEntity.ok(searchedMovies);
-    }
-    @GetMapping("/search")
-    public ResponseEntity<List<task>> getTaskByCategory(@RequestParam String category, @RequestParam int userId) {
-        List<task> searchedMovies = service.SearchTask(category,userId);
-        return ResponseEntity.ok(searchedMovies);
+
+
+     // search field
+    //search for a task
+     //working
+     @GetMapping("/search")
+     public String searchTasks(@RequestParam String name, Model model,Authentication authentication) {
+         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+         int userId = Uservice.getUserIdByUsername(userDetails.getUsername());
+         List<task> searchedTasks = service.SearchTask(name, userId);
+         model.addAttribute("tasks", searchedTasks);
+         return "redirect:/tasks";
+     }
+
+
+
+
+    // category filter
+    //display a tasks related to each category
+    @GetMapping("/categorizied")
+    public String getTaskByCategory(@RequestParam String category,Model model, Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        int userId = Uservice.getUserIdByUsername(userDetails.getUsername());
+        List<task> searchedTasks = service.getTaskBycategory(category,userId);
+        model.addAttribute("tasks", searchedTasks);
+        return "redirect:/tasks";
     }
 
 
